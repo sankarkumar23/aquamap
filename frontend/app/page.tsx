@@ -6,6 +6,7 @@ import { SearchBar } from '@/components/SearchBar';
 import { Filters } from '@/components/Filters';
 import { FacilitiesGrid } from '@/components/FacilitiesGrid';
 import { FacilityDetailModal } from '@/components/FacilityDetailModal';
+import { AquaMapIcon } from '@/components/AquaMapIcon';
 import { fetchStats } from '@/lib/api';
 import { Facility, FacilityFilters } from '@/types/facility';
 
@@ -32,11 +33,14 @@ export default function Home() {
       <header className="bg-white border-b border-gray-200 flex-shrink-0">
         <div className="w-full px-4 sm:px-6 lg:px-8 py-4">
           <div className="flex items-center justify-between">
-            <div>
-              <h1 className="text-3xl font-bold text-gray-900">AquaMap</h1>
-              <p className="text-sm text-gray-600 mt-1">
-                Water Treatment Facilities Database
-              </p>
+            <div className="flex items-center gap-3">
+              <AquaMapIcon size={40} className="flex-shrink-0" />
+              <div>
+                <h1 className="text-3xl font-bold text-gray-900">Water Facility Management System</h1>
+                <p className="text-sm text-gray-600 mt-1">
+                  Water Treatment Facilities Database
+                </p>
+              </div>
             </div>
             {stats && (
               <div className="flex items-center gap-6 text-sm">
@@ -45,6 +49,12 @@ export default function Home() {
                     {stats.total_count.toLocaleString()}
                   </div>
                   <div className="text-gray-600">Total Facilities</div>
+                </div>
+                <div className="text-center">
+                  <div className="text-2xl font-bold text-green-600">
+                    {stats.enriched_count.toLocaleString()}
+                  </div>
+                  <div className="text-gray-600">Enriched</div>
                 </div>
                 <div className="text-center">
                   <div className="text-2xl font-bold text-blue-600">
@@ -72,7 +82,14 @@ export default function Home() {
             <SearchBar
               value={filters.search || ''}
               onChange={(value) => {
-                setFilters({ ...filters, search: value });
+                // When searching, clear state filter to allow searching across all states
+                // This is especially important when searching by OSM ID
+                const newFilters = { ...filters, search: value };
+                if (value && value.trim()) {
+                  // Clear state filter when there's an active search
+                  delete newFilters.state;
+                }
+                setFilters(newFilters);
                 setCurrentPage(1);
               }}
             />

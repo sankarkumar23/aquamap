@@ -1,0 +1,14 @@
+<svg width="64" height="64" viewBox="0 0 64 64" fill="none" xmlns="http://www.w3.org/2000/svg">
+  <!-- Water drop background -->
+  <circle cx="32" cy="32" r="30" fill="#0EA5E9" opacity="0.1"/>
+  
+  <!-- Main water drop -->
+  <path d="M32 12C28 12 24 16 24 22C24 28 32 40 32 40C32 40 40 28 40 22C40 16 36 12 32 12Z" fill="#0EA5E9"/>
+  
+  <!-- Water waves -->
+  <path d="M16 48C18 46 22 46 24 48C26 50 28 52 30 50C32 48 34 48 36 50C38 52 40 50 42 48C44 46 46 46 48 48" stroke="#0EA5E9" stroke-width="2" stroke-linecap="round"/>
+  <path d="M18 54C20 52 24 52 26 54C28 56 30 58 32 56C34 54 36 54 38 56C40 58 42 56 44 54C46 52 48 52 50 54" stroke="#0EA5E9" stroke-width="2" stroke-linecap="round"/>
+  
+  <!-- Facility marker -->
+  <circle cx="32" cy="26" r="3" fill="#FFFFFF"/>
+</svg>

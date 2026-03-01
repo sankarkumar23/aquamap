@@ -14,7 +14,7 @@ const geistMono = Geist_Mono({
 });
 
 export const metadata: Metadata = {
-  title: "AquaMap - Water Treatment Facilities",
+  title: "Water Facility Management System",
   description: "View and explore water treatment facilities data",
 };
 
