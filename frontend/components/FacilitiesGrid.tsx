@@ -147,7 +147,7 @@ function FacilitiesGridContent({
               >
                 {/* Map Preview - Clickable to open map in new tab */}
                 <div 
-                  className="w-full h-48 bg-gray-200 relative overflow-hidden" 
+                  className="w-full h-48 bg-gray-200 relative overflow-hidden cursor-pointer" 
                   style={{ zIndex: 0 }}
                 >
                   <FacilityMapPreview facility={facility} />

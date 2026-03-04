@@ -108,6 +108,14 @@ export function FacilityMapPreview({
       keyboardShortcuts: false,
     });
 
+    // Disable pointer events on the map container so overlay can capture clicks
+    if (mapRef.current) {
+      const mapDiv = mapRef.current.querySelector('div');
+      if (mapDiv) {
+        mapDiv.style.pointerEvents = 'none';
+      }
+    }
+
     // Add marker
     const marker = new google.maps.Marker({
       position: { lat: facility.latitude, lng: facility.longitude },
@@ -208,17 +216,29 @@ export function FacilityMapPreview({
 
   return (
     <div 
-      ref={mapRef}
-      className="w-full h-full rounded-lg overflow-hidden relative z-0"
-      style={width && height ? { width, height, zIndex: 0 } : { zIndex: 0 }}
+      className="w-full h-full rounded-lg overflow-hidden relative cursor-pointer"
+      style={width && height ? { width, height } : undefined}
     >
+      <div 
+        ref={mapRef}
+        className="w-full h-full"
+        style={{ pointerEvents: 'none' }}
+      />
       {/* Transparent overlay to handle clicks for production API map */}
       <div
         className="absolute inset-0 cursor-pointer"
-        style={{ zIndex: 1 }}
+        style={{ 
+          zIndex: 999,
+          pointerEvents: 'auto',
+          backgroundColor: 'transparent'
+        }}
         onClick={(e) => {
           e.stopPropagation();
+          e.preventDefault();
           window.open(mapUrl, '_blank', 'noopener,noreferrer');
+        }}
+        onMouseDown={(e) => {
+          e.stopPropagation();
         }}
         onKeyDown={(e) => {
           if (e.key === 'Enter' || e.key === ' ') {
