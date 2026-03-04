@@ -47,41 +47,13 @@ body {
   background-size: 1000px 100%;
 }
 
-/* Ensure Leaflet maps in grid cards have lower z-index than modals */
-.leaflet-container {
+/* Ensure Google Maps in grid cards have lower z-index than modals */
+.gm-style {
   position: relative;
   z-index: 1;
 }
 
-/* Leaflet panes should stay below modals */
-.leaflet-pane {
-  z-index: auto;
-}
-
-.leaflet-map-pane {
-  z-index: auto;
-}
-
-.leaflet-tile-pane {
-  z-index: auto;
-}
-
-.leaflet-overlay-pane {
-  z-index: auto;
-}
-
-.leaflet-shadow-pane {
-  z-index: auto;
-}
-
-.leaflet-marker-pane {
-  z-index: auto;
-}
-
-.leaflet-tooltip-pane {
-  z-index: auto;
-}
-
-.leaflet-popup-pane {
+/* Google Maps container should stay below modals */
+.gm-style > div {
   z-index: auto;
 }

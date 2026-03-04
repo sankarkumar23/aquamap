@@ -1,6 +1,10 @@
 import { Facility, FacilitiesResponse, StatsResponse, FacilityFilters } from '@/types/facility';
 
-const API_BASE_URL = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:8000';
+// Use localhost for local development, or the environment variable if set
+const API_BASE_URL = process.env.NEXT_PUBLIC_API_URL || 
+  (typeof window !== 'undefined' && window.location.hostname === 'localhost' 
+    ? 'http://localhost:8000' 
+    : 'https://wfms-backend-778957359460.us-central1.run.app');
 
 export async function fetchFacilities(
   limit: number = 50,

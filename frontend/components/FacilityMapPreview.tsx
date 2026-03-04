@@ -15,67 +15,121 @@ export function FacilityMapPreview({
   height = 200 
 }: FacilityMapPreviewProps) {
   const mapRef = useRef<HTMLDivElement>(null);
-  const mapInstanceRef = useRef<any>(null);
+  const mapInstanceRef = useRef<google.maps.Map | null>(null);
+  const markerRef = useRef<google.maps.Marker | null>(null);
   const [isClient, setIsClient] = useState(false);
+  const [mapError, setMapError] = useState<string | null>(null);
+  const [isLoaded, setIsLoaded] = useState(false);
 
   useEffect(() => {
     setIsClient(true);
   }, []);
 
+  // Load Google Maps script
   useEffect(() => {
-    if (!isClient || !mapRef.current || mapInstanceRef.current || typeof window === 'undefined') return;
+    if (!isClient || typeof window === 'undefined') return;
 
-    // Dynamically import Leaflet only on client side
-    import('leaflet').then((L) => {
-      import('leaflet/dist/leaflet.css');
-      
-      if (!mapRef.current) return;
+    // Check if Google Maps is already loaded
+    if (window.google && window.google.maps) {
+      setIsLoaded(true);
+      return;
+    }
 
-      // Initialize Leaflet map with OpenStreetMap tiles (free, no API key)
-      const map = L.default.map(mapRef.current, {
-        center: [facility.latitude, facility.longitude],
-        zoom: 15,
-        zoomControl: false,
-        attributionControl: false,
-        dragging: false,
-        touchZoom: false,
-        doubleClickZoom: false,
-        scrollWheelZoom: false,
-        boxZoom: false,
-        keyboard: false,
-      });
+    const apiKey = process.env.NEXT_PUBLIC_GOOGLE_MAPS_API_KEY;
 
-      // Add OpenStreetMap tile layer (free)
-      L.default.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
-        maxZoom: 19,
-        attribution: '© OpenStreetMap contributors',
-      }).addTo(map);
+    if (!apiKey) {
+      setMapError('Google Maps API key not found. Please add NEXT_PUBLIC_GOOGLE_MAPS_API_KEY to .env.local');
+      return;
+    }
 
-      // Add marker with a simple red circle (no external dependencies)
-      const marker = L.default.circleMarker([facility.latitude, facility.longitude], {
-        radius: 8,
-        fillColor: '#ff0000',
-        color: '#ffffff',
-        weight: 2,
-        opacity: 1,
-        fillOpacity: 0.8,
-      }).addTo(map);
+    // Check if script is already being loaded
+    const existingScript = document.querySelector(`script[src*="maps.googleapis.com"]`);
+    if (existingScript) {
+      existingScript.addEventListener('load', () => setIsLoaded(true));
+      return;
+    }
 
-      // Ensure map fills the container properly
-      setTimeout(() => {
-        map.invalidateSize();
-      }, 0);
+    // Load Google Maps script
+    const script = document.createElement('script');
+    script.src = `https://maps.googleapis.com/maps/api/js?key=${apiKey}&libraries=places`;
+    script.async = true;
+    script.defer = true;
 
-      mapInstanceRef.current = map;
-    });
+    script.onload = () => {
+      setIsLoaded(true);
+    };
+
+    script.onerror = (error) => {
+      console.error('[Google Maps] Script load error:', error);
+      setMapError('Failed to load Google Maps script. Check your API key.');
+    };
+
+    document.head.appendChild(script);
 
     return () => {
+      // Don't remove script on cleanup as it might be used by other components
+    };
+  }, [isClient]);
+
+  // Initialize map once Google Maps is loaded
+  useEffect(() => {
+    if (!isLoaded || !mapRef.current || mapInstanceRef.current || typeof window === 'undefined') {
+      return;
+    }
+    if (!window.google || !window.google.maps) {
+      console.error('[Google Maps] Google Maps API not available');
+      return;
+    }
+
+    if (!mapRef.current) return;
+
+    // Initialize Google Map with satellite view only
+    const map = new google.maps.Map(mapRef.current, {
+      center: { lat: facility.latitude, lng: facility.longitude },
+      zoom: 17, // Reduced by 2 points (was 19)
+      mapTypeId: 'satellite', // Always satellite view
+      disableDefaultUI: true, // Disable all controls
+      zoomControl: false,
+      mapTypeControl: false,
+      scaleControl: false,
+      streetViewControl: false,
+      rotateControl: false,
+      fullscreenControl: false,
+      gestureHandling: 'none', // Disable all interactions
+      draggable: false,
+      scrollwheel: false,
+      disableDoubleClickZoom: true,
+      keyboardShortcuts: false,
+    });
+
+    // Add marker
+    const marker = new google.maps.Marker({
+      position: { lat: facility.latitude, lng: facility.longitude },
+      map: map,
+      icon: {
+        path: google.maps.SymbolPath.CIRCLE,
+        scale: 8,
+        fillColor: '#ff0000',
+        fillOpacity: 1,
+        strokeColor: '#ffffff',
+        strokeWeight: 2,
+      },
+    });
+
+    mapInstanceRef.current = map;
+    markerRef.current = marker;
+
+    return () => {
+      if (markerRef.current) {
+        markerRef.current.setMap(null);
+        markerRef.current = null;
+      }
       if (mapInstanceRef.current) {
-        mapInstanceRef.current.remove();
         mapInstanceRef.current = null;
       }
     };
-  }, [facility, isClient]);
+  }, [facility, isLoaded]);
+
 
   if (!isClient) {
     return (
@@ -83,6 +137,17 @@ export function FacilityMapPreview({
         className="w-full h-full bg-gray-200 rounded-lg animate-pulse"
         style={width && height ? { width, height } : undefined}
       />
+    );
+  }
+
+  if (mapError) {
+    return (
+      <div 
+        className="w-full h-full bg-gray-200 rounded-lg flex items-center justify-center text-red-600 text-xs p-2"
+        style={width && height ? { width, height } : undefined}
+      >
+        {mapError}
+      </div>
     );
   }
 

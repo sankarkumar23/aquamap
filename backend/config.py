@@ -9,9 +9,10 @@ GOOGLE_CLOUD_PROJECT_ID = os.getenv("GOOGLE_CLOUD_PROJECT_ID", "aquamap-488903")
 FIRESTORE_COLLECTION = os.getenv("FIRESTORE_COLLECTION", "facility")
 
 # API Configuration
-API_HOST = os.getenv("API_HOST", "localhost")
-API_PORT = int(os.getenv("API_PORT", 8000))
-API_TITLE = "AquaMap API"
+# Cloud Run uses PORT environment variable
+API_HOST = os.getenv("API_HOST", "0.0.0.0")
+API_PORT = int(os.getenv("PORT", os.getenv("API_PORT", 8000)))
+API_TITLE = "Water Facility Management System API"
 API_VERSION = "1.0.0"
 
 # CORS Configuration
@@ -44,4 +45,5 @@ SEARCH_FIELDS = [
     "types",
     "description",
     "operator",
+    "osm_id",  # Include OSM ID in search
 ]

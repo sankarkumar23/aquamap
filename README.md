@@ -1,4 +1,4 @@
-# AquaMap - Water Treatment Facilities Web Application
+# Water Facility Management System
 
 A full-stack web application for viewing and exploring water treatment facilities data from Google Cloud Firestore.
 

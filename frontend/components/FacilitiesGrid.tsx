@@ -65,7 +65,7 @@ export function FacilitiesGrid({
   
   // Calculate total pages - use has_next_page to determine if we can go further
   let totalPages = currentPage;
-  if (pagination?.total_count) {
+  if (pagination?.total_count != null && pagination.total_count > 0) {
     totalPages = Math.ceil(pagination.total_count / (pagination.per_page || 50));
   } else if (pagination?.has_next_page) {
     // If we have a next page but no total count, set totalPages to current + 1
@@ -79,10 +79,24 @@ export function FacilitiesGrid({
   // Calculate display info - prioritize pagination.total_count (filtered count) over stats totalCount
   // When filters are active, pagination.total_count contains the filtered count
   // When no filters, use totalCount from stats (overall total) if pagination.total_count is not available
+  // IMPORTANT: Check for null/undefined explicitly, not just falsy (0 is valid)
   const itemsPerPage = pagination?.per_page || 50;
   const startItem = (currentPage - 1) * itemsPerPage + 1;
   const endItem = startItem + facilities.length - 1;
-  const totalItems = pagination?.total_count ?? totalCount ?? facilities.length;
+  
+  // Use pagination.total_count if it's a number (including 0), otherwise fall back
+  // Check explicitly for null/undefined, but allow 0 as a valid count
+  let totalItems: number;
+  if (typeof pagination?.total_count === 'number') {
+    // total_count is a number (including 0)
+    totalItems = pagination.total_count;
+  } else if (totalCount != null && typeof totalCount === 'number') {
+    // Fall back to stats totalCount if pagination.total_count is null/undefined
+    totalItems = totalCount;
+  } else {
+    // Last resort: use facilities.length (but this should rarely happen)
+    totalItems = facilities.length;
+  }
   
   // Recalculate total pages with actual total count
   const actualTotalPages = pagination?.total_count 
@@ -133,10 +147,15 @@ export function FacilitiesGrid({
                   style={{ zIndex: 0 }}
                   onClick={(e) => {
                     e.stopPropagation();
-                    // Open OSM map in new tab (prefer OSM, fallback to Google Maps)
-                    const mapUrl = facility.osm_url || facility.google_maps_url;
-                    if (mapUrl) {
+                    // Always open Google Maps with higher zoom level
+                    // Use @ format which is more reliable for zoom control
+                    if (facility.latitude && facility.longitude) {
+                      // Use @ format with zoom level 20 (much closer than embedded map zoom of 17)
+                      const mapUrl = `https://www.google.com/maps/@${facility.latitude},${facility.longitude},20z`;
                       window.open(mapUrl, '_blank', 'noopener,noreferrer');
+                    } else if (facility.google_maps_url) {
+                      // Fallback to existing URL if coordinates not available
+                      window.open(facility.google_maps_url, '_blank', 'noopener,noreferrer');
                     }
                   }}
                 >

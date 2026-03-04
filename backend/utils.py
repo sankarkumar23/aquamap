@@ -37,11 +37,28 @@ def matches_search(facility: dict, search_query: str) -> bool:
     if not search_query:
         return True
     
-    search_lower = search_query.lower()
+    search_lower = search_query.lower().strip()
+    search_original = search_query.strip()
     
     for field in SEARCH_FIELDS:
         field_value = facility.get(field, "")
-        if search_lower in str(field_value).lower():
-            return True
+        
+        # Convert to string for comparison
+        field_str = str(field_value).strip()
+        field_lower = field_str.lower()
+        
+        # For OSM ID, check both exact match and substring match
+        # OSM ID might be stored as number or string, and is also the document ID
+        if field == "osm_id":
+            # Check exact match (case-insensitive and case-sensitive)
+            if search_lower == field_lower or search_original == field_str:
+                return True
+            # Also check if search is contained in OSM ID
+            if search_lower in field_lower:
+                return True
+        else:
+            # For other fields, check if search is contained
+            if search_lower in field_lower:
+                return True
     
     return False

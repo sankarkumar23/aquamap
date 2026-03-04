@@ -3,6 +3,8 @@ from fastapi import FastAPI, Query, HTTPException
 from fastapi.middleware.cors import CORSMiddleware
 from typing import Optional
 import uvicorn
+import logging
+import traceback
 
 from config import (
     API_TITLE,
@@ -19,6 +21,10 @@ from firestore_service import FirestoreService
 
 # Initialize FastAPI app
 app = FastAPI(title=API_TITLE, version=API_VERSION)
+
+# Configure logging
+logging.basicConfig(level=logging.INFO)
+logger = logging.getLogger(__name__)
 
 # CORS configuration
 app.add_middleware(
@@ -44,37 +50,34 @@ async def get_facilities(
     cursor: Optional[str] = Query(None, description="Cursor for cursor-based pagination"),
     page: Optional[int] = Query(None, ge=1, description="Page number for offset-based pagination"),
     search: Optional[str] = Query(None, description="Full-text search query"),
-    facility_type: Optional[str] = Query(None, description="Filter by facility type"),
     state: Optional[str] = Query(None, description="Filter by state abbreviation"),
-    is_enriched: Optional[int] = Query(None, ge=0, le=1, description="Filter by enrichment status"),
 ):
-    """Get facilities with pagination, filtering, and search."""
+    """Get paginated list of facilities with optional filters."""
     try:
         facilities_list, has_next, next_cursor, total_count = firestore_service.get_facilities_paginated(
             limit=limit,
             cursor=cursor,
             page=page,
-            facility_type=facility_type,
-            is_enriched=is_enriched,
-            state=state,
             search=search,
+            state=state,
         )
         
-        # Convert to Facility models
-        facilities = [Facility(**fac) for fac in facilities_list]
+        # Convert to FacilitiesResponse model
+        pagination = PaginationInfo(
+            has_next_page=has_next,
+            next_cursor=next_cursor,
+            total_count=total_count,
+            current_page=page,
+            per_page=limit
+        )
         
         return FacilitiesResponse(
-            data=facilities,
-            pagination=PaginationInfo(
-                has_next_page=has_next,
-                next_cursor=next_cursor,
-                current_page=page if page else 1,
-                per_page=limit,
-                total_count=total_count,
-            )
+            data=facilities_list,
+            pagination=pagination
         )
-    
     except Exception as e:
+        error_traceback = traceback.format_exc()
+        logger.error(f"Error in get_facilities: {str(e)}\n{error_traceback}")
         raise HTTPException(status_code=500, detail=str(e))
 
 
@@ -83,9 +86,10 @@ async def get_stats():
     """Get statistics about facilities."""
     try:
         stats = firestore_service.get_stats()
-        return StatsResponse(**stats)
-    
+        return stats
     except Exception as e:
+        error_traceback = traceback.format_exc()
+        logger.error(f"Error in get_stats: {str(e)}\n{error_traceback}")
         raise HTTPException(status_code=500, detail=str(e))
 
 
@@ -93,16 +97,15 @@ async def get_stats():
 async def get_facility(osm_id: str):
     """Get a single facility by OSM ID."""
     try:
-        facility_data = firestore_service.get_facility_by_id(osm_id)
-        
-        if not facility_data:
+        facility = firestore_service.get_facility_by_osm_id(osm_id)
+        if not facility:
             raise HTTPException(status_code=404, detail="Facility not found")
-        
-        return Facility(**facility_data)
-    
+        return facility
     except HTTPException:
         raise
     except Exception as e:
+        error_traceback = traceback.format_exc()
+        logger.error(f"Error in get_facility: {str(e)}\n{error_traceback}")
         raise HTTPException(status_code=500, detail=str(e))
 
 
@@ -112,5 +115,6 @@ async def root():
     return {"message": API_TITLE, "version": API_VERSION}
 
 
+# For local development
 if __name__ == "__main__":
     uvicorn.run(app, host=API_HOST, port=API_PORT)

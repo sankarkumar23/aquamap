@@ -1,9 +1,10 @@
 """Firestore service for database operations."""
 from typing import Optional, List, Dict, Any
+import traceback
 from google.cloud import firestore
 from google.cloud.firestore_v1.base_query import BaseQuery
 from config import GOOGLE_CLOUD_PROJECT_ID, FIRESTORE_COLLECTION
-from utils import extract_state_from_address, matches_search
+from utils import matches_search
 
 
 class FirestoreService:
@@ -39,27 +40,26 @@ class FirestoreService:
     
     def build_query(
         self,
-        facility_type: Optional[str] = None,
-        is_enriched: Optional[int] = None,
+        state: Optional[str] = None,
+        search: Optional[str] = None,
     ) -> BaseQuery:
         """Build a Firestore query with filters.
         
         Args:
-            facility_type: Filter by facility type
-            is_enriched: Filter by enrichment status (0 or 1)
+            state: Filter by state abbreviation
+            search: Full-text search query (applied after fetching)
             
         Returns:
             Firestore query object
         """
-        # Don't order by name in Firestore since empty strings come first
-        # We'll sort in memory after fetching to put empty names at bottom
-        query = self.collection.order_by("osm_id")  # Use osm_id for consistent ordering
+        # For Firestore composite indexes, where clauses should come before order_by
+        query = self.collection
         
-        if facility_type:
-            query = query.where("facility_type", "==", facility_type)
+        if state:
+            query = query.where("state", "==", state.upper())
         
-        if is_enriched is not None:
-            query = query.where("is_enriched", "==", is_enriched)
+        # Order by sort_name for consistent sorting (this field should have normalized values)
+        query = query.order_by("sort_name")
         
         return query
     
@@ -68,98 +68,104 @@ class FirestoreService:
         limit: int,
         cursor: Optional[str] = None,
         page: Optional[int] = None,
-        facility_type: Optional[str] = None,
-        is_enriched: Optional[int] = None,
         state: Optional[str] = None,
         search: Optional[str] = None,
     ) -> tuple[List[Dict[str, Any]], bool, Optional[str], Optional[int]]:
-        """Get facilities with pagination, filtering, and search.
+        """Get facilities with virtual pagination, ordered by name.
         
-        IMPORTANT: Always fetch ALL records, apply filters and sorting, then paginate.
-        This ensures filtering and sorting work across the entire dataset.
+        Fetches only the records for the requested page using Firestore's offset/limit.
+        State filtering is done server-side using the state field.
+        Search filtering is applied after fetching the page (client-side text matching).
         
         Args:
             limit: Number of records per page
-            cursor: Cursor for cursor-based pagination (not used when filters are active)
-            page: Page number for offset-based pagination
-            facility_type: Filter by facility type
-            is_enriched: Filter by enrichment status
-            state: Filter by state abbreviation
-            search: Full-text search query
+            cursor: Cursor for cursor-based pagination (not currently used)
+            page: Page number for offset-based pagination (1-indexed)
+            state: Filter by state abbreviation (uses state field directly)
+            search: Full-text search query (applied after fetching page)
             
         Returns:
             Tuple of (facilities list, has_next_page, next_cursor, total_count) 
         """
-        # Build base query
-        query = self.build_query(facility_type, is_enriched)
+        # Build base query with state filter (if provided) and order by name
+        query = self.build_query(state=state, search=search)
         
-        # ALWAYS fetch ALL records to ensure proper filtering and sorting across entire dataset
-        # This is necessary because:
-        # 1. State filter extracts from address (client-side operation)
-        # 2. Search is client-side text matching
-        # 3. Sorting by name with empty names at bottom requires full dataset
-        print(f"[DEBUG] Fetching all records for filtering/sorting. Filters: state={state}, search={search}, facility_type={facility_type}, is_enriched={is_enriched}")
+        # For page-based pagination, calculate offset
+        if page:
+            offset = (page - 1) * limit
+            # Apply offset and limit to query - Firestore will fetch only this page
+            query = query.offset(offset).limit(limit + 1)  # Fetch one extra to check if there's a next page
+        else:
+            # For cursor-based or first page, just use limit
+            query = query.limit(limit + 1)  # Fetch one extra to check if there's a next page
         
-        # Fetch ALL documents from Firestore (no limit)
-        docs = query.stream()
+        # Execute query - this fetches only the records for the requested page
+        docs = list(query.stream())
+        
+        # Check if there's a next page (we fetched limit + 1)
+        has_next = len(docs) > limit
+        
+        # Always return exactly 'limit' number of documents
+        docs = docs[:limit]  # Slice to exact limit
+        
         facilities_list = []
-        
-        # Fetch all documents
-        doc_count = 0
         for doc in docs:
-            doc_count += 1
             facility_data = doc.to_dict()
-            facility_data["osm_id"] = doc.id
+            # Ensure osm_id is set from document ID
+            facility_data["osm_id"] = str(doc.id)
             
-            # Apply state filter (client-side since we extract from address)
-            if state:
-                facility_state = extract_state_from_address(facility_data.get("address", ""))
-                if facility_state != state.upper():
-                    continue
-            
-            # Apply search filter (client-side)
+            # Apply search filter (client-side text matching)
             if search:
                 if not matches_search(facility_data, search):
                     continue
             
             facilities_list.append(facility_data)
         
-        print(f"[DEBUG] Fetched {doc_count} total documents, {len(facilities_list)} after filtering")
+        # sort_name field should already be normalized in Firestore
+        # No need for additional Python-side sorting since sort_name handles empty names
+        # But we'll keep a simple sort as a safety measure in case sort_name is missing
+        facilities_list.sort(key=lambda x: (
+            str(x.get("sort_name", "")).lower() if x.get("sort_name") else "\uffff",
+            str(x.get("name", "")).lower() if x.get("name") else "\uffff"
+        ))
         
-        # Sort by name: non-empty names first (case-insensitive), then empty/null names at bottom
-        def sort_key(facility):
-            name = facility.get("name", "").strip()
-            if not name or name == "":
-                # Empty names go to bottom - use a high value to ensure they sort last
-                return (1, "zzzzzzzzzzzzzzzzzzzz")  # Use very high value to ensure empty names are last
-            return (0, name.lower())  # Non-empty names sorted alphabetically
-        
-        facilities_list.sort(key=sort_key)
-        print(f"[DEBUG] Sorted {len(facilities_list)} facilities")
-        
-        # Calculate total count BEFORE pagination (this is the true total after filtering)
-        total_count = len(facilities_list)
-        
-        # Apply pagination AFTER filtering and sorting
-        # For page-based pagination
-        if page:
-            offset = (page - 1) * limit
-            facilities_list = facilities_list[offset:offset + limit]
-            has_next = (offset + limit) < total_count
-        else:
-            # For cursor-based or first page, just take the first 'limit' records
-            has_next = len(facilities_list) > limit
-            if has_next:
-                facilities_list = facilities_list[:limit]
+        # If search filter was applied and filtered out results, we may need to adjust has_next
+        # But we can't fetch more, so we'll keep the original has_next from the query
+        # The frontend will handle this by checking if we got fewer results than expected
         
         # Get next cursor (using osm_id of last item)
         next_cursor = None
         if facilities_list and has_next:
             next_cursor = facilities_list[-1].get("osm_id")
         
-        print(f"[DEBUG] Returning {len(facilities_list)} facilities, has_next={has_next}, total_count={total_count}")
+        # For total_count: Get accurate count for the filtered state
+        # IMPORTANT: Get total count BEFORE pagination, for the filtered state
+        # Use manual count with select([]) - this is reliable and efficient (only fetches document IDs)
+        total_count = None
+        try:
+            # Build count query with same filters (state filter) but without order_by
+            # We use select([]) to only fetch document IDs, not full documents (efficient)
+            count_query = self.collection
+            if state:
+                count_query = count_query.where("state", "==", state.upper())
+            
+            # Count all matching documents by streaming with select([])
+            # This only fetches document IDs, not full document data
+            doc_count = 0
+            for doc in count_query.select([]).stream():
+                doc_count += 1
+            total_count = doc_count
+        except Exception as e:
+            # If counting fails, try to estimate based on current page results
+            # If we have has_next, we know there are more than what we fetched
+            if has_next:
+                # Estimate: at least (current page * limit) + 1
+                estimated_min = (page * limit if page else limit) + 1
+                total_count = estimated_min
+            else:
+                # No next page, so total is exactly what we have
+                total_count = len(facilities_list)
         
-        # Return total count (calculated after filtering, before pagination)
         return facilities_list, has_next, next_cursor, total_count
     
     def get_all_facilities(self) -> List[Dict[str, Any]]:

@@ -72,7 +72,7 @@ export function Pagination({
       <button
         onClick={() => onPageChange(1)}
         disabled={currentPage === 1 || isLoading}
-        className="flex items-center gap-1 px-3 py-2 text-sm font-medium text-gray-700 bg-white border border-gray-300 rounded-lg hover:bg-gray-50 disabled:opacity-50 disabled:cursor-not-allowed"
+        className="flex items-center gap-1 px-3 py-2 text-sm font-medium text-gray-700 bg-white border border-gray-300 rounded-lg hover:bg-gray-50 cursor-pointer disabled:opacity-50 disabled:cursor-not-allowed"
         title="First page"
       >
         <ChevronsLeft className="w-4 h-4" />
@@ -83,7 +83,7 @@ export function Pagination({
       <button
         onClick={() => onPageChange(currentPage - 1)}
         disabled={!canGoPrev || isLoading}
-        className="flex items-center gap-1 px-3 py-2 text-sm font-medium text-gray-700 bg-white border border-gray-300 rounded-lg hover:bg-gray-50 disabled:opacity-50 disabled:cursor-not-allowed"
+        className="flex items-center gap-1 px-3 py-2 text-sm font-medium text-gray-700 bg-white border border-gray-300 rounded-lg hover:bg-gray-50 cursor-pointer disabled:opacity-50 disabled:cursor-not-allowed"
       >
         <ChevronLeft className="w-4 h-4" />
         Previous
@@ -108,7 +108,7 @@ export function Pagination({
               key={pageNum}
               onClick={() => onPageChange(pageNum)}
               disabled={isLoading}
-              className={`px-4 py-2 text-sm font-medium rounded-lg ${
+              className={`px-4 py-2 text-sm font-medium rounded-lg cursor-pointer ${
                 isActive
                   ? 'bg-blue-600 text-white'
                   : 'text-gray-700 bg-white border border-gray-300 hover:bg-gray-50'
@@ -124,7 +124,7 @@ export function Pagination({
       <button
         onClick={() => onPageChange(currentPage + 1)}
         disabled={!canGoNext || isLoading}
-        className="flex items-center gap-1 px-3 py-2 text-sm font-medium text-gray-700 bg-white border border-gray-300 rounded-lg hover:bg-gray-50 disabled:opacity-50 disabled:cursor-not-allowed"
+        className="flex items-center gap-1 px-3 py-2 text-sm font-medium text-gray-700 bg-white border border-gray-300 rounded-lg hover:bg-gray-50 cursor-pointer disabled:opacity-50 disabled:cursor-not-allowed"
       >
         Next
         <ChevronRight className="w-4 h-4" />
@@ -135,7 +135,7 @@ export function Pagination({
         <button
           onClick={() => onPageChange(totalPages)}
           disabled={currentPage === totalPages || isLoading || !canGoNext}
-          className="flex items-center gap-1 px-3 py-2 text-sm font-medium text-gray-700 bg-white border border-gray-300 rounded-lg hover:bg-gray-50 disabled:opacity-50 disabled:cursor-not-allowed"
+          className="flex items-center gap-1 px-3 py-2 text-sm font-medium text-gray-700 bg-white border border-gray-300 rounded-lg hover:bg-gray-50 cursor-pointer disabled:opacity-50 disabled:cursor-not-allowed"
           title="Last page"
         >
           Last
