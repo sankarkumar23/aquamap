@@ -1,6 +1,8 @@
 'use client';
 
+import { Suspense } from 'react';
 import { useQuery } from '@tanstack/react-query';
+import { useSearchParams } from 'next/navigation';
 import dynamic from 'next/dynamic';
 import { fetchFacilities } from '@/lib/api';
 import { Facility, FacilityFilters } from '@/types/facility';
@@ -22,13 +24,15 @@ interface FacilitiesGridProps {
   totalCount?: number;
 }
 
-export function FacilitiesGrid({ 
+function FacilitiesGridContent({ 
   filters, 
   currentPage, 
   onPageChange,
   onFacilityClick,
   totalCount
 }: FacilitiesGridProps) {
+  const searchParams = useSearchParams();
+  const showOsm = searchParams?.has('osm') ?? false;
   const {
     data,
     isLoading,
@@ -143,21 +147,8 @@ export function FacilitiesGrid({
               >
                 {/* Map Preview - Clickable to open map in new tab */}
                 <div 
-                  className="w-full h-48 bg-gray-200 relative overflow-hidden cursor-pointer" 
+                  className="w-full h-48 bg-gray-200 relative overflow-hidden" 
                   style={{ zIndex: 0 }}
-                  onClick={(e) => {
-                    e.stopPropagation();
-                    // Always open Google Maps with higher zoom level
-                    // Use @ format which is more reliable for zoom control
-                    if (facility.latitude && facility.longitude) {
-                      // Use @ format with zoom level 20 (much closer than embedded map zoom of 17)
-                      const mapUrl = `https://www.google.com/maps/@${facility.latitude},${facility.longitude},20z`;
-                      window.open(mapUrl, '_blank', 'noopener,noreferrer');
-                    } else if (facility.google_maps_url) {
-                      // Fallback to existing URL if coordinates not available
-                      window.open(facility.google_maps_url, '_blank', 'noopener,noreferrer');
-                    }
-                  }}
                 >
                   <FacilityMapPreview facility={facility} />
                 </div>
@@ -167,6 +158,12 @@ export function FacilitiesGrid({
                   <h3 className="text-lg font-semibold text-gray-900 mb-2 line-clamp-2">
                     {facility.name || 'Unnamed Facility'}
                   </h3>
+                  
+                  {showOsm && (
+                    <div className="text-xs text-gray-500 mb-2">
+                      OSM ID: <span className="font-mono">{facility.osm_id}</span>
+                    </div>
+                  )}
                   
                   <div className="space-y-2 text-sm text-gray-600 flex-1">
                     <div className="flex items-start gap-2">
@@ -219,5 +216,23 @@ export function FacilitiesGrid({
       </div>
 
     </div>
+  );
+}
+
+export function FacilitiesGrid(props: FacilitiesGridProps) {
+  return (
+    <Suspense fallback={
+      <div className="flex flex-col h-full">
+        <div className="flex-1 overflow-auto p-6">
+          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 2xl:grid-cols-5 gap-6">
+            {Array.from({ length: 20 }).map((_, index) => (
+              <FacilityCardSkeleton key={index} />
+            ))}
+          </div>
+        </div>
+      </div>
+    }>
+      <FacilitiesGridContent {...props} />
+    </Suspense>
   );
 }

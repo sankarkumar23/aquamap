@@ -21,13 +21,18 @@ export function FacilityMapPreview({
   const [mapError, setMapError] = useState<string | null>(null);
   const [isLoaded, setIsLoaded] = useState(false);
 
+  // Check if we're in local development
+  const isLocal = typeof window !== 'undefined' && window.location.hostname === 'localhost';
+
+  // All hooks must be called before any conditional returns
   useEffect(() => {
     setIsClient(true);
   }, []);
 
+  // For production: use Google Maps API
   // Load Google Maps script
   useEffect(() => {
-    if (!isClient || typeof window === 'undefined') return;
+    if (!isClient || typeof window === 'undefined' || isLocal) return;
 
     // Check if Google Maps is already loaded
     if (window.google && window.google.maps) {
@@ -69,10 +74,11 @@ export function FacilityMapPreview({
     return () => {
       // Don't remove script on cleanup as it might be used by other components
     };
-  }, [isClient]);
+  }, [isClient, isLocal]);
 
   // Initialize map once Google Maps is loaded
   useEffect(() => {
+    if (isLocal) return; // Skip API initialization for local
     if (!isLoaded || !mapRef.current || mapInstanceRef.current || typeof window === 'undefined') {
       return;
     }
@@ -128,15 +134,61 @@ export function FacilityMapPreview({
         mapInstanceRef.current = null;
       }
     };
-  }, [facility, isLoaded]);
+  }, [facility, isLoaded, isLocal]);
 
-
+  // Now we can do conditional rendering after all hooks are called
   if (!isClient) {
     return (
       <div 
         className="w-full h-full bg-gray-200 rounded-lg animate-pulse"
         style={width && height ? { width, height } : undefined}
       />
+    );
+  }
+
+  // For local: use free Google Maps embed (iframe) - no API key needed
+  if (isLocal) {
+    // Free Google Maps embed URL - works without API key
+    // t=k = satellite view, z=17 = zoom level
+    const freeEmbedUrl = `https://www.google.com/maps?q=${facility.latitude},${facility.longitude}&t=k&z=17&output=embed`;
+    
+    // Google Maps URL to open in new tab when clicked
+    const mapUrl = `https://www.google.com/maps/@${facility.latitude},${facility.longitude},20z`;
+
+    return (
+      <div 
+        className="w-full h-full rounded-lg overflow-hidden relative z-0"
+        style={width && height ? { width, height, zIndex: 0 } : { zIndex: 0 }}
+      >
+        <iframe
+          src={freeEmbedUrl}
+          width="100%"
+          height="100%"
+          style={{ border: 0, pointerEvents: 'none' }}
+          allowFullScreen
+          loading="lazy"
+          referrerPolicy="no-referrer-when-downgrade"
+        />
+        {/* Transparent overlay to handle clicks */}
+        <div
+          className="absolute inset-0 cursor-pointer"
+          style={{ zIndex: 1 }}
+          onClick={(e) => {
+            e.stopPropagation();
+            window.open(mapUrl, '_blank', 'noopener,noreferrer');
+          }}
+          onKeyDown={(e) => {
+            if (e.key === 'Enter' || e.key === ' ') {
+              e.preventDefault();
+              e.stopPropagation();
+              window.open(mapUrl, '_blank', 'noopener,noreferrer');
+            }
+          }}
+          tabIndex={0}
+          role="button"
+          aria-label="Open location in Google Maps"
+        />
+      </div>
     );
   }
 
@@ -151,11 +203,34 @@ export function FacilityMapPreview({
     );
   }
 
+  // Google Maps URL to open in new tab when clicked (for production)
+  const mapUrl = `https://www.google.com/maps/@${facility.latitude},${facility.longitude},20z`;
+
   return (
     <div 
       ref={mapRef}
       className="w-full h-full rounded-lg overflow-hidden relative z-0"
       style={width && height ? { width, height, zIndex: 0 } : { zIndex: 0 }}
-    />
+    >
+      {/* Transparent overlay to handle clicks for production API map */}
+      <div
+        className="absolute inset-0 cursor-pointer"
+        style={{ zIndex: 1 }}
+        onClick={(e) => {
+          e.stopPropagation();
+          window.open(mapUrl, '_blank', 'noopener,noreferrer');
+        }}
+        onKeyDown={(e) => {
+          if (e.key === 'Enter' || e.key === ' ') {
+            e.preventDefault();
+            e.stopPropagation();
+            window.open(mapUrl, '_blank', 'noopener,noreferrer');
+          }
+        }}
+        tabIndex={0}
+        role="button"
+        aria-label="Open location in Google Maps"
+      />
+    </div>
   );
 }

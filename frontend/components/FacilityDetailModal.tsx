@@ -1,6 +1,7 @@
 'use client';
 
-import { useEffect } from 'react';
+import { useEffect, Suspense } from 'react';
+import { useSearchParams } from 'next/navigation';
 import { Facility } from '@/types/facility';
 import { X, MapPin, Phone, Globe, ExternalLink } from 'lucide-react';
 import dynamic from 'next/dynamic';
@@ -16,7 +17,11 @@ interface FacilityDetailModalProps {
   onClose: () => void;
 }
 
-export function FacilityDetailModal({ facility, onClose }: FacilityDetailModalProps) {
+function FacilityDetailModalContent({ facility, onClose }: FacilityDetailModalProps) {
+  const searchParams = useSearchParams();
+  // Check if 'osm' query parameter exists in URL (regardless of value)
+  const showOsm = searchParams?.has('osm') ?? false;
+
   // Handle ESC key to close modal
   useEffect(() => {
     if (!facility) return;
@@ -36,8 +41,22 @@ export function FacilityDetailModal({ facility, onClose }: FacilityDetailModalPr
   if (!facility) return null;
 
   return (
-    <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-[9999] p-4">
-      <div className="bg-white rounded-lg max-w-3xl w-full max-h-[95vh] overflow-y-auto relative z-[10000]">
+    <div 
+      className="fixed inset-0 bg-black bg-opacity-20 flex items-center justify-center z-[9999] p-4"
+      onClick={(e) => {
+        // Close modal when clicking on the backdrop
+        if (e.target === e.currentTarget) {
+          onClose();
+        }
+      }}
+    >
+      <div 
+        className="bg-white rounded-lg max-w-3xl w-full max-h-[95vh] overflow-y-auto relative z-[10000] shadow-xl"
+        onClick={(e) => {
+          // Prevent closing when clicking inside the modal content
+          e.stopPropagation();
+        }}
+      >
         <div className="sticky top-0 bg-white border-b border-gray-200 px-6 py-3 flex justify-between items-center z-10">
           <h2 className="text-xl font-bold text-gray-900 line-clamp-2 pr-4">{facility.name}</h2>
           <button
@@ -57,10 +76,12 @@ export function FacilityDetailModal({ facility, onClose }: FacilityDetailModalPr
                 <label className="text-xs font-medium text-gray-500">Facility Type</label>
                 <p className="text-sm text-gray-900 mt-0.5">{facility.facility_type}</p>
               </div>
-              <div>
-                <label className="text-xs font-medium text-gray-500">OSM ID</label>
-                <p className="text-sm text-gray-900 mt-0.5">{facility.osm_id}</p>
-              </div>
+              {showOsm && (
+                <div>
+                  <label className="text-xs font-medium text-gray-500">OSM ID</label>
+                  <p className="text-sm text-gray-900 mt-0.5">{facility.osm_id}</p>
+                </div>
+              )}
               <div>
                 <label className="text-xs font-medium text-gray-500">Operator</label>
                 <p className="text-sm text-gray-900 mt-0.5">{facility.operator || 'N/A'}</p>
@@ -141,23 +162,25 @@ export function FacilityDetailModal({ facility, onClose }: FacilityDetailModalPr
                   Google Maps
                 </a>
               )}
-              <a
-                href={facility.osm_url}
-                target="_blank"
-                rel="noopener noreferrer"
-                className="inline-flex items-center gap-1.5 px-3 py-1.5 text-xs bg-green-600 text-white rounded hover:bg-green-700 transition-colors"
-              >
-                <ExternalLink className="w-3 h-3" />
-                OpenStreetMap
-              </a>
+              {showOsm && (
+                <a
+                  href={facility.osm_url}
+                  target="_blank"
+                  rel="noopener noreferrer"
+                  className="inline-flex items-center gap-1.5 px-3 py-1.5 text-xs bg-green-600 text-white rounded hover:bg-green-700 transition-colors"
+                >
+                  <ExternalLink className="w-3 h-3" />
+                  OpenStreetMap
+                </a>
+              )}
             </div>
           </section>
 
           {/* Map View */}
           <section>
             <h3 className="text-base font-semibold text-gray-900 mb-2">Location Map</h3>
-            <div className="w-full h-48 rounded-lg overflow-hidden border border-gray-200">
-              <FacilityMapPreview facility={facility} width={800} height={192} />
+            <div className="w-full h-64 rounded-lg overflow-hidden border border-gray-200 relative cursor-pointer">
+              <FacilityMapPreview facility={facility} width={800} height={256} />
             </div>
           </section>
 
@@ -181,5 +204,13 @@ export function FacilityDetailModal({ facility, onClose }: FacilityDetailModalPr
         </div>
       </div>
     </div>
+  );
+}
+
+export function FacilityDetailModal({ facility, onClose }: FacilityDetailModalProps) {
+  return (
+    <Suspense fallback={null}>
+      <FacilityDetailModalContent facility={facility} onClose={onClose} />
+    </Suspense>
   );
 }
