@@ -73,16 +73,16 @@ class FirestoreService:
     ) -> tuple[List[Dict[str, Any]], bool, Optional[str], Optional[int]]:
         """Get facilities with virtual pagination, ordered by name.
         
-        Fetches only the records for the requested page using Firestore's offset/limit.
+        Fetches records with state filter, applies search filter, then paginates.
         State filtering is done server-side using the state field.
-        Search filtering is applied after fetching the page (client-side text matching).
+        Search filtering is applied before pagination (client-side text matching).
         
         Args:
             limit: Number of records per page
             cursor: Cursor for cursor-based pagination (not currently used)
             page: Page number for offset-based pagination (1-indexed)
             state: Filter by state abbreviation (uses state field directly)
-            search: Full-text search query (applied after fetching page)
+            search: Full-text search query (applied before pagination)
             
         Returns:
             Tuple of (facilities list, has_next_page, next_cursor, total_count) 
@@ -90,81 +90,51 @@ class FirestoreService:
         # Build base query with state filter (if provided) and order by name
         query = self.build_query(state=state, search=search)
         
-        # For page-based pagination, calculate offset
-        if page:
-            offset = (page - 1) * limit
-            # Apply offset and limit to query - Firestore will fetch only this page
-            query = query.offset(offset).limit(limit + 1)  # Fetch one extra to check if there's a next page
-        else:
-            # For cursor-based or first page, just use limit
-            query = query.limit(limit + 1)  # Fetch one extra to check if there's a next page
+        # Fetch all matching records (with state filter) - we'll apply search and paginate after
+        # Note: This is necessary because Firestore doesn't support full-text search natively
+        all_docs = list(query.stream())
         
-        # Execute query - this fetches only the records for the requested page
-        docs = list(query.stream())
-        
-        # Check if there's a next page (we fetched limit + 1)
-        has_next = len(docs) > limit
-        
-        # Always return exactly 'limit' number of documents
-        docs = docs[:limit]  # Slice to exact limit
-        
-        facilities_list = []
-        for doc in docs:
+        # Convert to facility dictionaries and apply search filter
+        all_facilities = []
+        for doc in all_docs:
             facility_data = doc.to_dict()
             # Ensure osm_id is set from document ID
             facility_data["osm_id"] = str(doc.id)
             
-            # Apply search filter (client-side text matching)
+            # Apply search filter (client-side text matching) BEFORE pagination
             if search:
                 if not matches_search(facility_data, search):
                     continue
             
-            facilities_list.append(facility_data)
+            all_facilities.append(facility_data)
         
         # sort_name field should already be normalized in Firestore
         # No need for additional Python-side sorting since sort_name handles empty names
         # But we'll keep a simple sort as a safety measure in case sort_name is missing
-        facilities_list.sort(key=lambda x: (
+        all_facilities.sort(key=lambda x: (
             str(x.get("sort_name", "")).lower() if x.get("sort_name") else "\uffff",
             str(x.get("name", "")).lower() if x.get("name") else "\uffff"
         ))
         
-        # If search filter was applied and filtered out results, we may need to adjust has_next
-        # But we can't fetch more, so we'll keep the original has_next from the query
-        # The frontend will handle this by checking if we got fewer results than expected
+        # Now apply pagination to the filtered results
+        total_filtered = len(all_facilities)
+        
+        if page:
+            offset = (page - 1) * limit
+            facilities_list = all_facilities[offset:offset + limit]
+            has_next = offset + limit < total_filtered
+        else:
+            # First page or cursor-based
+            facilities_list = all_facilities[:limit]
+            has_next = len(all_facilities) > limit
         
         # Get next cursor (using osm_id of last item)
         next_cursor = None
         if facilities_list and has_next:
             next_cursor = facilities_list[-1].get("osm_id")
         
-        # For total_count: Get accurate count for the filtered state
-        # IMPORTANT: Get total count BEFORE pagination, for the filtered state
-        # Use manual count with select([]) - this is reliable and efficient (only fetches document IDs)
-        total_count = None
-        try:
-            # Build count query with same filters (state filter) but without order_by
-            # We use select([]) to only fetch document IDs, not full documents (efficient)
-            count_query = self.collection
-            if state:
-                count_query = count_query.where("state", "==", state.upper())
-            
-            # Count all matching documents by streaming with select([])
-            # This only fetches document IDs, not full document data
-            doc_count = 0
-            for doc in count_query.select([]).stream():
-                doc_count += 1
-            total_count = doc_count
-        except Exception as e:
-            # If counting fails, try to estimate based on current page results
-            # If we have has_next, we know there are more than what we fetched
-            if has_next:
-                # Estimate: at least (current page * limit) + 1
-                estimated_min = (page * limit if page else limit) + 1
-                total_count = estimated_min
-            else:
-                # No next page, so total is exactly what we have
-                total_count = len(facilities_list)
+        # Total count is the number of filtered facilities (after search)
+        total_count = total_filtered
         
         return facilities_list, has_next, next_cursor, total_count
     
